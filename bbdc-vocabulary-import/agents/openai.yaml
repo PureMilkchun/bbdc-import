@@ -1,0 +1,4 @@
+interface:
+  display_name: "不背单词批量导入"
+  short_description: "整理英文词表并批量推送到不背单词账号的我的生词本中"
+  default_prompt: "用 $bbdc-vocabulary-import 把我提供的英文词表加入不背单词生词本。"
