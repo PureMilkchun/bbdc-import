@@ -17,7 +17,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "bbdc-vocabulary-import" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "bbdc-vocabulary-import" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import bbdc_import as cli
 import bbdc_remote as remote
