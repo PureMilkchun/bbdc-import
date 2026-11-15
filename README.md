@@ -4,19 +4,13 @@
 
 ## 安装
 
-有 Node.js 时，可以用 [Skills CLI](https://github.com/vercel-labs/skills) 安装到当前项目（以 Codex 为例）：
+有 Node.js 时，用 [Skills CLI](https://github.com/vercel-labs/skills) 一行安装：
 
 ```sh
-npx skills add PureMilkchun/bbdc-import --skill bbdc-vocabulary-import --agent codex
+npx skills add PureMilkchun/bbdc-import
 ```
 
-把 `codex` 换成 `claude-code`、`cursor` 等目标 Agent；要安装给当前用户的所有项目，加 `--global`。
-
-如果你用的 GitHub CLI 已支持 [`gh skill install`](https://cli.github.com/manual/gh_skill_install)，也可以运行：
-
-```sh
-gh skill install PureMilkchun/bbdc-import bbdc-vocabulary-import --agent codex
-```
+安装器会检测受支持的客户端，必要时让你选择。Claude Code、Cursor、Codex 等使用同一条命令。默认装到当前项目；要在所有项目使用，加 `--global`。
 
 也可以下载 [ZIP 安装包](./bbdc-vocabulary-import.zip)，把解压后的 `bbdc-vocabulary-import` 文件夹放到客户端的 Skill 目录。运行依赖见[安装说明](./skills/bbdc-vocabulary-import/references/setup.md)。
 
