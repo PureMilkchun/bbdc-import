@@ -14,6 +14,10 @@ npx skills add PureMilkchun/bbdc-import
 
 也可以下载 [ZIP 安装包](./bbdc-vocabulary-import.zip)，把解压后的 `bbdc-vocabulary-import` 文件夹放到客户端的 Skill 目录。运行依赖见[安装说明](./skills/bbdc-vocabulary-import/references/setup.md)。
 
+### 思源笔记
+
+思源桌面版可安装 [思源插件 ZIP](./bbdc-import-siyuan.zip)，直接在内置 Agent 中使用，不需要 Python。见[思源安装说明](./integrations/siyuan/README.md)。
+
 ## 开始使用
 
 把词表交给 Agent，说「用 `$bbdc-vocabulary-import` 把这份词表导入不背单词的生词本」。第一次在弹出的独立浏览器里手动登录，Agent 会报告新增、已存在、失败和待核对的数量。
@@ -23,5 +27,7 @@ npx skills add PureMilkchun/bbdc-import
 ## 验证
 
 在仓库根目录运行 `python -B -m unittest discover -s tests -v`。浏览器集成测试使用本地模拟服务，不会连接你的不背单词账号；运行全部测试需要 Playwright 和 Chromium。
+
+思源插件的模拟测试用 `node --test tests/siyuan.test.cjs`。
 
 接口流程参考 [WordRadar](https://github.com/seven-steven/word-radar)。
