@@ -38,6 +38,9 @@ test("use the native Agent tool and require a visible confirmation before any wr
     const plugin = new (load(remote))();
     plugin.onload();
     assert.equal(plugin.capability.name, "bbdc_wordbook");
+    assert.match(plugin.topBar.icon, /^<svg/);
+    assert.match(plugin.topBar.icon, /currentColor/);
+    assert.equal(plugin.topBar.title, "不背单词 · 登录");
     const preview = await plugin.capability.handler({ action: "preview", words: [" Resilient", "resilient", "coach’s"] });
     assert.deepEqual(preview.structuredContent.terms, ["resilient", "coach's"]);
     assert.equal(calls, 0);

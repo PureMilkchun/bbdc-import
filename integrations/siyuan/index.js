@@ -6,6 +6,14 @@ const ORIGIN = "https://bbdc.cn";
 const DICTIONARY = "https://langeasy.com.cn";
 const PARTITION = "persist:bbdc-import-siyuan";
 const BATCH_SIZE = 20;
+// A simplified version of the plugin icon, sized for SiYuan's monochrome toolbar.
+const TOOLBAR_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 19c-1.2-1.4-3-2-5-2H3.5V5.5H7c2 0 3.8.6 5 2 1.2-1.4 3-2 5-2h3.5V13"/>
+    <path d="M12 7.5V19M6.2 9h3M6.2 12h3M14.8 9h3"/>
+    <circle cx="18.5" cy="17.5" r="3.8"/>
+    <path d="M18.5 15.7v3.6M16.7 17.5h3.6"/>
+</svg>`;
 const TERM = /^[a-z]+(?:[-' ][a-z]+)*$/;
 const LOGIN_ERRORS = new Set(["请登录", "请先登录", "未登录", "请重新登录", "登录已过期"]);
 const LOGIN_NAVIGATION = new Set([ORIGIN, "https://open.weixin.qq.com"]);
@@ -202,7 +210,7 @@ module.exports = class BbdcPlugin extends Plugin {
         if (typeof this.addAgentCapability !== "function" || !remote.session || !remote.BrowserWindow) return;
         const client = createClient((url, options) => requestJSON(remote, url, options));
         this.addTopBar({
-            id: "bbdc-login", icon: "iconAccount", position: "right", title: "不背单词 · 登录",
+            id: "bbdc-login", icon: TOOLBAR_ICON, position: "right", title: "不背单词 · 登录",
             callback: () => {
                 try {
                     if (this.busy) { showMessage(TIPS.busy); return; }
