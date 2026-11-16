@@ -16,7 +16,7 @@ npx skills add PureMilkchun/bbdc-import
 
 ### 思源笔记
 
-思源桌面版可安装 [思源插件 ZIP](./bbdc-import-siyuan.zip)，直接在内置 Agent 中使用，不需要 Python。见[思源安装说明](./integrations/siyuan/README.md)。
+思源桌面版可安装[不背单词导入插件](https://github.com/PureMilkchun/bbdc-import-siyuan)，直接在内置 Agent 中使用，不需要 Python。插件的最新版本和安装说明以独立仓库为准。
 
 ## 开始使用
 
