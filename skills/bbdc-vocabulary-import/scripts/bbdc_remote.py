@@ -211,15 +211,50 @@ def ensure_login(context, login_timeout: int | None, tell) -> None:
     raise ServiceError(code, "login")
 
 
-def exists(request, word: str) -> bool:
-    body = fetch_json(request, f"{BBDC}/api/check-new-word", "check_existing",
-                      params={"word": word, "infoidx": "100"})
-    code = result_code(body)
-    data = body.get("data_body")
-    if (code not in (None, 200) or not isinstance(data, dict)
-            or not isinstance(data.get("list", []), list)):
-        raise ServiceError("invalid_response", "check_existing", remote_code=code)
-    return bool(data.get("list", []))
+def list_wordbook(request) -> set[str]:
+    """Read all pages before concluding any requested word is missing."""
+    words: set[str] = set()
+    expected = None
+    count = 0
+    page = 0
+
+    def integer(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ServiceError("invalid_response", "wordbook")
+        if not math.isfinite(value) or int(value) != value:
+            raise ServiceError("invalid_response", "wordbook")
+        return int(value)
+
+    while True:
+        body = fetch_json(request, f"{BBDC}/api/user-new-word", "wordbook", params={"page": str(page)})
+        data = body.get("data_body")
+        if result_code(body) != 200 or not isinstance(data, dict):
+            raise ServiceError("invalid_response", "wordbook")
+        info, records = data.get("pageInfo"), data.get("wordList")
+        if not isinstance(info, dict) or not isinstance(records, list):
+            raise ServiceError("invalid_response", "wordbook")
+        total = integer(info.get("totalRecord"))
+        size = integer(info.get("pageSize"))
+        pages = integer(info.get("totalPage"))
+        current = integer(info.get("currentPage"))
+        if total < 0 or size <= 0 or pages < 0 or pages > 5000 or current != page + 1:
+            raise ServiceError("invalid_response", "wordbook")
+        if (total and pages != (total + size - 1) // size) or (not total and pages > 1):
+            raise ServiceError("invalid_response", "wordbook")
+        if expected is None:
+            expected = (total, size, pages)
+        if expected != (total, size, pages) or len(records) != min(size, max(0, total - page * size)):
+            raise ServiceError("wordbook_changed", "wordbook")
+        for item in records:
+            if not isinstance(item, dict) or not isinstance(item.get("word"), str) or not item["word"].strip():
+                raise ServiceError("invalid_response", "wordbook")
+            words.add(item["word"].strip().lower())
+        count += len(records)
+        page += 1
+        if page >= pages:
+            if count != total:
+                raise ServiceError("wordbook_changed", "wordbook")
+            return words
 
 
 def definition(request, word: str) -> str:

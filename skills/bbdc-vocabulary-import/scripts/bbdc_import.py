@@ -44,6 +44,7 @@ HINTS = {
     "network_error": "连接中断。确认网络可用后重推剩余词。",
     "unexpected_redirect": "接口返回意外跳转。先检查网页能否打开；必要时改用 WordRadar。",
     "invalid_response": "服务返回了无法识别的数据。暂停推送，先检查服务，或导出 CSV 给 WordRadar。",
+    "wordbook_changed": "读取时生词本发生变化，已暂停。请稍后重新核对。",
     "word_rejected": "不背单词没有接受这个词。核对拼写；如果是短语，试一下单词形式。",
     "repeated_rejection": "连续几个词都被不背单词拒绝。先核对词表和网页，再决定是否重推。",
     "profile_busy": "这个浏览器会话正在使用中。等另一轮结束或关闭账号窗口后再试。",
@@ -137,6 +138,7 @@ def run_batch(
 ) -> None:
     verb = "核对" if lookup_only else "推送"
     tell_user(f"开始{verb} {len(terms)} 个词。")
+    existing_words = remote.list_wordbook(account)
     last_update = time.monotonic()
     rejection_streak = 0
     last_rejection = None
@@ -145,7 +147,7 @@ def run_batch(
             time.sleep(WORD_GAP)
         stage = "check_existing"
         try:
-            if remote.exists(account, word):
+            if word in existing_words:
                 outcomes[word] = {"state": "existing"}
             elif lookup_only:
                 outcomes[word] = {"state": "missing"}
@@ -155,6 +157,7 @@ def run_batch(
                 stage = "add"
                 remote.add_word(account, word, info)
                 outcomes[word] = {"state": "added", "without_definition": not info}
+                existing_words.add(word)
                 rejection_streak = 0
         except remote.ServiceError as error:
             state = "uncertain" if error.code == "write_unconfirmed" else "failed"

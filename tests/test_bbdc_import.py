@@ -113,7 +113,7 @@ except r.ServiceError as error:
         source = self.write("words.txt", "present\nmaybe\nlater\n")
         output = self.root / "remaining.csv"
         def interrupted(args, terms, report, outcomes):
-            with patch.object(remote, "exists", side_effect=lambda req, w: w == "present"), \
+            with patch.object(remote, "list_wordbook", return_value={"present"}), \
                     patch.object(remote, "definition", return_value="meaning"), \
                     patch.object(remote, "add_word", side_effect=KeyboardInterrupt):
                 cli.run_batch(terms, None, None, outcomes, lookup_only=False)
@@ -175,17 +175,22 @@ class Wire(BaseHTTPRequestHandler):
             return self.auth_needed()
         if url.path == "/api/check-login":
             return self.send({"result_code": 200})
-        if url.path == "/api/check-new-word":
-            word = query["word"][0]
-            self.server.checks.append((word, query["infoidx"]))
-            if word == "expired":
+        if url.path == "/api/user-new-word":
+            page = int(query["page"][0])
+            self.server.checks.append(page)
+            if self.server.failure == "expired":
                 return self.auth_needed()
-            if word == "limiting":
+            if self.server.failure == "limiting":
                 return self.send({"result_code": 429}, 429, {"Retry-After": "17"})
-            if word == "transient" and sum(term == word for term, _ in self.server.checks) == 1:
+            if self.server.failure == "transient" and len(self.server.checks) == 1:
                 return self.send({}, 503)
-            result = {"list": [{"word": word}]} if word in self.server.present else {}
-            return self.send({"result_code": 200, "data_body": result, "error_body": {}})
+            records = sorted(self.server.present)
+            size = 2
+            pages = max(1, (len(records) + size - 1) // size)
+            result = {"wordList": [{"word": word} for word in records[page * size:(page + 1) * size]],
+                      "pageInfo": {"totalRecord": len(records), "pageSize": size, "totalPage": pages,
+                                   "currentPage": page + 1}}
+            return self.send({"result_code": 200, "data_body": result})
         return self.send({}, 404)
 
     def do_POST(self):
@@ -253,6 +258,7 @@ class WireFlow(unittest.TestCase):
         self.server.posts.clear()
         self.server.post_violations.clear()
         self.server.present.clear()
+        self.server.failure = None
         wait = patch.object(cli, "WORD_GAP", 0)
         wait.start()
         self.addCleanup(wait.stop)
@@ -304,22 +310,26 @@ class WireFlow(unittest.TestCase):
             (["broken", "later"], "invalid_response", 1),
         ]:
             with self.subTest(report_code=desired):
+                self.server.checks.clear()
+                self.server.failure = terms[0] if desired != "invalid_response" else None
                 source, recovery = self.source(*terms)
                 code, report, _ = command("push", source, "--remaining-out", recovery)
-                self.assertEqual((code, report["stop_reason"], report["unattempted"]), (exit_code, desired, 1))
+                expected_unattempted = 1 if desired == "invalid_response" else 2
+                self.assertEqual((code, report["stop_reason"], report["unattempted"]), (exit_code, desired, expected_unattempted))
                 self.assertEqual(self.server.posts, [])
                 self.assertEqual(words.read_terms(recovery).words, terms)
                 if desired == "rate_limited":
                     self.assertEqual(report["retry_after_seconds"], 17)
-                    self.assertEqual([term for term, _ in self.server.checks].count("limiting"), 1)
+                    self.assertEqual(len(self.server.checks), 1)
 
     def test_read_retry_and_repeated_business_rejection(self):
         source, _ = self.source("transient", "reject a", "reject b", "reject c", "after")
+        self.server.failure = "transient"
         code, report, _ = command("push", source)
         self.assertEqual((code, report["added"], report["unattempted"], report["stop_reason"]),
                          (1, 1, 1, "repeated_rejection"))
         self.assertEqual([word["word"] for word in report["failed"]], ["reject a", "reject b", "reject c"])
-        self.assertEqual([term for term, _ in self.server.checks].count("transient"), 2)
+        self.assertEqual(len(self.server.checks), 2)
         self.assertEqual([record["word"] for record in self.server.posts].count("transient"), 1)
 
 

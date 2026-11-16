@@ -61,8 +61,11 @@ test("check-only does not request definitions or add; push reports a lost write 
         const word = url.searchParams.get("word");
         actions.push([url.pathname, word, options]);
         if (url.pathname === "/api/check-login") return { status: 200, data: { result_code: 200 } };
-        if (url.pathname === "/api/check-new-word") {
-            return { status: 200, data: { result_code: 200, data_body: { list: word === "already" ? [word] : [] } } };
+        if (url.pathname === "/api/user-new-word" && !options?.body) {
+            return { status: 200, data: { result_code: 200, data_body: {
+                wordList: [{ word: "already" }],
+                pageInfo: { totalRecord: 1, pageSize: 24, totalPage: 1, currentPage: 1 },
+            } } };
         }
         if (url.pathname === "/loadLexisList.action") {
             assert.equal(options.account, false);
@@ -80,7 +83,7 @@ test("check-only does not request definitions or add; push reports a lost write 
     const check = await execute(client, "check", ["already", "not yet"], () => assert.fail("no confirmation"), { gapMs: 0 });
     assert.deepEqual(check.existing, ["already"]);
     assert.deepEqual(check.missing, ["not yet"]);
-    assert.equal(actions.length, 3);
+    assert.equal(actions.length, 2);
     actions.length = 0;
     const push = await execute(client, "push", ["already", "fresh", "unclear", "later"], async () => true, { gapMs: 0 });
     assert.equal(push.status, "write_unconfirmed");
@@ -88,7 +91,7 @@ test("check-only does not request definitions or add; push reports a lost write 
     assert.deepEqual(push.without_definition, ["fresh"]);
     assert.deepEqual(push.uncertain, ["unclear"]);
     assert.deepEqual(push.remaining, ["later"]);
-    assert.equal(actions.filter(a => a[0] === "/api/user-new-word").length, 2);
+    assert.equal(actions.filter(a => a[0] === "/api/user-new-word" && a[2]?.body).length, 2);
 });
 
 test("HTTP 200 logged-out response and HTTP 429 stop the batch before further requests", async () => {
@@ -104,4 +107,70 @@ test("HTTP 200 logged-out response and HTTP 429 stop the batch before further re
         assert.deepEqual(result.remaining, ["fresh"]);
         assert.equal(calls, 1);
     }
+});
+
+test("an incomplete wordbook response never triggers an add", async () => {
+    const { createClient, execute } = load().test;
+    const calls = [];
+    const client = createClient(async raw => {
+        const route = new URL(raw).pathname;
+        calls.push(route);
+        if (route === "/api/check-login") return { status: 200, data: { result_code: 200 } };
+        if (route === "/api/user-new-word") return { status: 200, data: { result_code: 200, data_body: {} } };
+        assert.fail("Unexpected request " + route);
+    });
+    const result = await execute(client, "push", ["vivid"], async () => true, { gapMs: 0 });
+    assert.equal(result.status, "invalid_response");
+    assert.deepEqual(result.remaining, ["vivid"]);
+    assert.deepEqual(calls, ["/api/check-login", "/api/user-new-word"]);
+});
+
+test("reads every wordbook page and stops if pagination changes", async () => {
+    const { createClient, execute } = load().test;
+    let inconsistent = false;
+    let posts = 0;
+    const client = createClient(async (raw, options) => {
+        const url = new URL(raw);
+        if (url.pathname === "/api/check-login") return { status: 200, data: { result_code: 200 } };
+        if (options?.body) { posts++; assert.fail("unexpected write"); }
+        const page = Number(url.searchParams.get("page"));
+        const records = [[{ word: "vivid" }, { word: "relief" }], [{ word: "postoperative" }]][page];
+        return { status: 200, data: { result_code: 200, data_body: {
+            wordList: records,
+            pageInfo: { totalRecord: inconsistent && page === 1 ? 4 : 3, pageSize: 2, totalPage: 2, currentPage: page + 1 },
+        } } };
+    });
+    const terms = ["vivid", "postoperative", "not-there"];
+    const result = await execute(client, "check", terms, async () => true, { gapMs: 0 });
+    assert.deepEqual(result.existing, ["vivid", "postoperative"]);
+    assert.deepEqual(result.missing, ["not-there"]);
+    inconsistent = true;
+    const stopped = await execute(client, "push", terms, async () => true, { gapMs: 0 });
+    assert.equal(stopped.status, "wordbook_changed");
+    assert.deepEqual(stopped.remaining, terms);
+    assert.equal(posts, 0);
+});
+
+test("a transient list failure is retried and 12 pages are checked before results", async () => {
+    const { createClient, execute } = load().test;
+    const counts = new Map();
+    const client = createClient(async raw => {
+        const url = new URL(raw);
+        if (url.pathname === "/api/check-login") return { status: 200, data: { result_code: 200 } };
+        const page = Number(url.searchParams.get("page"));
+        counts.set(page, (counts.get(page) || 0) + 1);
+        if (page === 3 && counts.get(page) === 1) throw Object.assign(new Error("temporary"), { code: "network_error" });
+        const length = Math.min(24, 274 - page * 24);
+        const words = Array.from({ length }, (_, i) => ({ word: `term${page}-${i}` }));
+        if (page === 6) words[0] = { word: "vivid" };
+        if (page === 0) words[0] = { word: "postoperative" };
+        return { status: 200, data: { result_code: 200, data_body: {
+            wordList: words, pageInfo: { totalRecord: 274, pageSize: 24, totalPage: 12, currentPage: page + 1 },
+        } } };
+    });
+    const result = await execute(client, "check", ["vivid", "postoperative", "not-there"], () => {}, { gapMs: 0 });
+    assert.deepEqual(result.existing, ["vivid", "postoperative"]);
+    assert.deepEqual(result.missing, ["not-there"]);
+    assert.equal(counts.size, 12);
+    assert.equal(counts.get(3), 2);
 });
